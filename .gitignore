@@ -28,6 +28,6 @@ next-env.d.ts
 
 # Google Cloud / Firebase secrets
 scripts/serviceAccountKey.json
-*.json
+
 # local env files
 .env.local
