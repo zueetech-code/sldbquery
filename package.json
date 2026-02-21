@@ -71,7 +71,11 @@
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/pg": "^8.16.0",
+<<<<<<< HEAD
     "@types/react": "^19",
+=======
+    "@types/react": "^19.2.14",
+>>>>>>> 7a03767 (fix sldb)
     "@types/react-dom": "^19",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",

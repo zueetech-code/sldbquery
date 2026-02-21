@@ -8,7 +8,11 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
+<<<<<<< HEAD
   title: "Zuetech - UCCS",
+=======
+  title: "Zuetech - SLDB",
+>>>>>>> 7a03767 (fix sldb)
   description: "Created with Zuetech",
   generator: "Zuetech.com",
   icons: {
