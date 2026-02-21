@@ -8,7 +8,7 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Zuetech - UCCS",
+  title: "Zuetech - SLDB",
   description: "Created with Zuetech",
   generator: "Zuetech.com",
   icons: {
