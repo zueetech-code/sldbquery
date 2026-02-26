@@ -60,7 +60,7 @@ export function RCSClientsTable({ clients }: Props) {
         .map((d) => d.data())
         .filter(
           (c) =>
-            c.queryId === "kvshJ7oJ4x8GXgZOi950" &&
+            c.queryId === "V4IHSyeHkP77L99fXapy" &&
             c.status === "success" &&
             c.createdAt?.toDate() >= today
         )
