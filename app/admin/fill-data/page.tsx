@@ -759,15 +759,6 @@ const normalizeRows = (rows: any[]) =>
     }
     return cleaned
   })
-  const normalizeSafety = (raw: any) => ({
-  SDSCode: raw.sds_code ?? raw.SDSCode ?? "",
-  Date: raw.date ?? raw.Date ?? "",
-  SafetyLocker: raw.safety_locker ?? raw.SafetyLocker ?? "",
-  DefenderDoor: raw.defender_door ?? raw.DefenderDoor ?? "",
-  BurglaryAlarm: raw.burglary_alarm ?? raw.BurglaryAlarm ?? "",
-  CCTV: raw.cctv ?? raw.CCTV ?? "",
-  SMSAlert: raw.sms_alert ?? raw.SMSAlert ?? "",
-})
 
 setFetchedData({
   branch: normalizeRows(data.branch || []),
@@ -793,7 +784,7 @@ setReportDate(date)
 
 setNpaData(prev => ({ ...prev, ...data.npa, SDSCode: sds, Date: date }))
 setProfitData(prev => ({ ...prev, ...data.profit, SDSCode: sds, Date: date }))
-setSafetyData(normalizeSafety(data.safety))
+setSafetyData(prev => ({ ...prev, ...data.safety, SDSCode: sds, Date: date }))
 setEmpData(prev => ({ ...prev, ...data.emp, SDSCode: sds, Date: date }))
     setProgress("Loaded from offline server")
     return true
@@ -1001,13 +992,6 @@ const handleSubmitReport = async () => {
     alert("Error saving report")
   }
 }
-const SAFETY_KEYS = [
-  "SafetyLocker",
-  "DefenderDoor",
-  "BurglaryAlarm",
-  "CCTV",
-  "SMSAlert",
-] as const
 const resetall = () => {
   // 🔥 CLEAR EVERYTHING AFTER SAVE
       setFetchedData({
@@ -1634,33 +1618,35 @@ const renderTabContent = () => {
                   />
                 </div>
 
-                {SAFETY_KEYS.map((key) => {
-                    const labelText = key.replace(/([A-Z])/g, " $1").trim()
+                {Object.keys(safetyData)
+                  .filter(key => key !== "SDSCode" && key !== "Date")
+                  .map((key) => {
+                  const labelText = key.replace(/([A-Z])/g, ' $1').trim();
 
-                    return (
-                      <div className="flex items-center" key={key}>
-                        <Label className="w-64">{labelText}</Label>
+                  return (
+                    <div className="flex items-center" key={key}>
+                      <Label className="w-64">{labelText}</Label>
 
-                        <Select
-                          value={safetyData[key] || ""}
-                          onValueChange={(val) =>
-                            setSafetyData({
-                              ...safetyData,
-                              [key]: val,
-                            })
-                          }
-                        >
-                          <SelectTrigger className="w-32 h-8 rounded-none">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Yes">Yes</SelectItem>
-                            <SelectItem value="No">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )
-                  })}
+                      <Select
+                        value={safetyData[key as keyof typeof safetyData] || ""}
+                        onValueChange={(val: string) =>
+                          setSafetyData({
+                            ...safetyData,
+                            [key]: val // Type-safe assignment
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-32 h-8 rounded-none">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
 
               </div>
             );
