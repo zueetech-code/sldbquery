@@ -43,7 +43,7 @@ const todayStr =
         clientId,
         status: "pending",
         createdAt: FieldValue.serverTimestamp(),
-        queryId: "kvshJ7oJ4x8GXgZOi950",
+        queryId: "V4IHSyeHkP77L99fXapy",
         variables: { Fromdate: todayStr },
       })
 
@@ -51,7 +51,7 @@ const todayStr =
       const commandsSnap = await adminDb
         .collection("commands")
         .where("clientId", "==", clientId)
-        .where("queryId", "==", "kvshJ7oJ4x8GXgZOi950")
+        .where("queryId", "==", "V4IHSyeHkP77L99fXapy")
         .where("status", "==", "success")
         .orderBy("createdAt", "desc")
         .limit(1)
