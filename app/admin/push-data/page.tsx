@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase-client";
 import { collection, getDocs } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { report } from "process";
 
 /* ================= TYPES ================= */
 
@@ -13,16 +12,20 @@ type View =
   | "TOTAL_CLIENTS"
   | "PENDING_TODAY"
   | "SUBMITTED"
+  | "SUBMITTED_SOURCE"
   | "TO_BE_PUSHED"
   | "PUSHED"
   | "FAILED";
 
-/* ================= COMPONENT ================= */
-
 export default function PushDataPage() {
+
   const [clients, setClients] = useState<string[]>([]);
-  const [lastSubmittedData, setLastSubmittedData] = useState<any[]>([]);
-  const [pushResult, setPushResult] = useState<any>(null);
+  const [firebaseSubmitted, setFirebaseSubmitted] = useState<any[]>([]);
+  const [localSubmitted, setLocalSubmitted] = useState<any[]>([]);
+  const [pushLogs, setPushLogs] = useState<any[]>([]);
+
+  const [submissionSource, setSubmissionSource] =
+    useState<"FIREBASE" | "LOCAL" | null>(null);
 
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [pushDate, setPushDate] = useState("");
@@ -31,11 +34,7 @@ export default function PushDataPage() {
   const [viewHistory, setViewHistory] = useState<View[]>([]);
 
   const [loading, setLoading] = useState(false);
-
-  const [alert, setAlert] = useState<{
-    type: "success" | "error" | "warning" | "info";
-    message: string;
-  } | null>(null);
+  const [selectedDate, setSelectedDate] = useState("");
 
   /* ================= VIEW HELPERS ================= */
 
@@ -60,8 +59,9 @@ export default function PushDataPage() {
 
   useEffect(() => {
     loadClients();
-    loadSubmitted();
-    console.log("Initial load: clients and last submitted data");
+    loadFirebaseSubmitted();
+    loadLocalSubmitted();
+    loadPushLogs();
   }, []);
 
   async function loadClients() {
@@ -69,85 +69,186 @@ export default function PushDataPage() {
     setClients(snap.docs.map((d) => d.data().name || d.id));
   }
 
-  async function loadSubmitted() {
-    const res = await fetch("/api/last-submitted-data");
-    const data = await res.json();
-    console.log("Fetched last submitted data:", data);
-    setLastSubmittedData(Array.isArray(data) ? data : data ? [data] : []);
-    console.log("Last submitted data:", data);
+  async function loadFirebaseSubmitted() {
+    const snap = await getDocs(collection(db, "final_reports"));
+
+    const data = snap.docs.map((d) => ({
+      client_name: d.data().clientName,
+      report_date: d.data().fromDate,
+    }));
+
+    setFirebaseSubmitted(data);
+  }
+
+  async function loadLocalSubmitted() {
+    try {
+      const res = await fetch("/api/last-submitted-data");
+      const data = await res.json();
+
+      const formatted = (Array.isArray(data) ? data : [data]).map((d) => ({
+        client_name: d.client_name,
+        report_date: d.report_date,
+      }));
+
+      setLocalSubmitted(formatted);
+    } catch {
+      setLocalSubmitted([]);
+    }
+  }
+
+  async function loadPushLogs() {
+    try {
+      const res = await fetch("/api/push/logs");
+      const data = await res.json();
+      setPushLogs(Array.isArray(data) ? data : []);
+    } catch {
+      setPushLogs([]);
+    }
   }
 
   /* ================= DATE ================= */
 
+  function formatDate(date: Date) {
+    return (
+      date.getFullYear() +
+      "-" +
+      String(date.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(date.getDate()).padStart(2, "0")
+    );
+  }
 
+  useEffect(() => {
+  const today = new Date();
+  setSelectedDate(formatDate(today));
+}, []);
 
-  /* ================= LIST DERIVATION ================= */
+  
 
- const todayLocal = new Date().toISOString().split("T")[0];
- function formatDate(date: Date) {
-  return (
-    date.getFullYear() +
-    "-" +
-    String(date.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(date.getDate()).padStart(2, "0")
-  );
-}
+  /* ================= SUBMITTED LIST ================= */
 
-const today = new Date();
-const oneDayBefore = new Date(today);
-oneDayBefore.setDate(today.getDate() - 1);
+  const firebaseToday = firebaseSubmitted
+    .filter((d) => d.report_date === selectedDate)
+    .map((d) => d.client_name);
 
-const formattedOneDayBefore = formatDate(oneDayBefore);
-//console.log(formattedOneDayBefore); // e.g. "2026-02-25"
+  const localToday = localSubmitted
+    .filter((d) => d.report_date === selectedDate)
+    .map((d) => d.client_name);
 
-const submittedToday = lastSubmittedData
-  .filter((d) => d.report_date === formattedOneDayBefore)
-  .map((d) => d.client_name);
+  const allSubmitted = [...firebaseToday, ...localToday];
+
+  const activeSubmitted =
+    submissionSource === "FIREBASE"
+      ? firebaseToday
+      : submissionSource === "LOCAL"
+      ? localToday
+      : [];
+
   const pendingToday = clients.filter(
-    (c) => !submittedToday.includes(c)
+    (c) => !allSubmitted.includes(c)
   );
 
-  const pushedClients =
-    pushResult?.success?.map((s: any) => s.client_name) || [];
+  const todayPushLogs = pushLogs.filter(
+    (l) => l.report_date === selectedDate
+  );
 
-  const failedClients =
-    pushResult?.failed?.map((f: any) => f.client_name) || [];
+  /* ================= PUSH STATUS ================= */
 
-  const toBePushed = submittedToday.filter(
+  function groupPushLogsByClient(logs: any[]) {
+    const map = new Map<string, any[]>();
+
+    logs.forEach((log) => {
+      if (!map.has(log.client_name)) {
+        map.set(log.client_name, []);
+      }
+      map.get(log.client_name)!.push(log);
+    });
+
+    return map;
+  }
+
+  function deriveFinalClientStatus(logs: any[]) {
+    const grouped = groupPushLogsByClient(logs);
+
+    const pushed: string[] = [];
+    const failed: string[] = [];
+
+    grouped.forEach((entries, client) => {
+      const hasFailed = entries.some((e) => e.status === "FAILED");
+      const hasSuccess = entries.some((e) => e.status === "SUCCESS");
+
+      if (hasFailed) failed.push(client);
+      else if (hasSuccess) pushed.push(client);
+    });
+
+    return { pushed, failed };
+  }
+
+  const { pushed: pushedClients, failed: failedClients } =
+    deriveFinalClientStatus(todayPushLogs);
+    const pushedData = Object.values(
+  todayPushLogs.reduce((acc: any, log: any) => {
+
+    if (!acc[log.client_name]) {
+      acc[log.client_name] = {
+        client_name: log.client_name,
+        report_date: log.report_date,
+        modules: [],
+        status: "SUCCESS",
+      };
+    }
+
+    acc[log.client_name].modules.push(log.module);
+
+    if (log.status === "FAILED") {
+      acc[log.client_name].status = "FAILED";
+    }
+
+    return acc;
+
+  }, {})
+);
+
+  const toBePushed = activeSubmitted.filter(
     (c) => !pushedClients.includes(c)
   );
 
   /* ================= COUNTS ================= */
 
   const totalClientsCount = clients.length;
-  const submittedCount = submittedToday.length;
   const pendingTodayCount = pendingToday.length;
 
   const pushedCount = pushedClients.length;
   const failedCount = failedClients.length;
   const toBePushedCount = toBePushed.length;
 
+  /* ================= DOWNLOAD ================= */
+
+  function downloadJSON(data: any, date: string) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `push_result_${date}.json`;
+    a.click();
+  }
+
   /* ================= PUSH ================= */
 
   async function handlePush() {
-    if (selectedClients.length === 0) {
-      setAlert({
-        type: "warning",
-        message: "Please select at least one client before pushing.",
-      });
-      return;
-    }
+    if (selectedClients.length === 0) return;
 
     try {
       setLoading(true);
 
-      setAlert({
-        type: "info",
-        message: "Pushing data to RCS. Please wait...",
-      });
+      const apiEndpoint =
+        submissionSource === "FIREBASE"
+          ? "/api/push/rcs"
+          : "/api/push/local";
 
-      const res = await fetch("/api/push/rcs", {
+      const res = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -160,28 +261,13 @@ const submittedToday = lastSubmittedData
       });
 
       const data = await res.json();
-      console.log("Push result:", data);
-      setPushResult(data);
-
-      if (data.failed?.length > 0) {
-        setAlert({
-          type: "warning",
-          message: `${data.failed.length} client(s) failed. You can retry them.`,
-        });
-      } else {
-        setAlert({
-          type: "success",
-          message: "All selected data pushed successfully to RCS.",
-        });
-      }
 
       downloadJSON(data, pushDate);
-      loadSubmitted();
-    } catch {
-      setAlert({
-        type: "error",
-        message: "Failed to push data. Please check network or server.",
-      });
+
+      await loadPushLogs();
+
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -192,57 +278,32 @@ const submittedToday = lastSubmittedData
   return (
     <div className="space-y-6">
 
-      {/* ===== POPUP ALERT (MODAL) ===== */}
-      {alert && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-5 relative">
-
-            <button
-              onClick={() => setAlert(null)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-black"
-            >
-              ✕
-            </button>
-
-            <h2
-              className={`text-lg font-semibold mb-2 ${
-                alert.type === "success"
-                  ? "text-green-600"
-                  : alert.type === "error"
-                  ? "text-red-600"
-                  : alert.type === "warning"
-                  ? "text-yellow-600"
-                  : "text-blue-600"
-              }`}
-            >
-              {alert.type.toUpperCase()}
-            </h2>
-
-            <p className="text-gray-700">{alert.message}</p>
-
-            <div className="mt-4 text-right">
-              <button
-                onClick={() => setAlert(null)}
-                className="px-4 py-1 rounded bg-gray-200 hover:bg-gray-300"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== LOADING OVERLAY ===== */}
       {loading && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-          <div className="bg-white px-6 py-4 rounded shadow text-center space-y-2">
-            <div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full mx-auto" />
-            <p className="font-medium">Pushing data to RCS...</p>
+        <div className="fixed inset-0 z-50 bg-blue-600/20 flex items-center justify-center">
+          <div className="bg-white px-10 py-8 rounded-xl shadow-xl text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="animate-spin h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+            </div>
+            <p className="text-lg font-semibold text-blue-700">
+              Pushing data to RCS...
+            </p>
           </div>
         </div>
       )}
+      <div className="flex items-center gap-3">
 
-      <h1 className="text-3xl font-bold">Push Data to RCS</h1>
+          <label className="font-semibold">
+            Select Date
+          </label>
+
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border px-3 py-2 rounded"
+          />
+
+        </div>
 
       {view !== "NONE" && (
         <button
@@ -253,57 +314,119 @@ const submittedToday = lastSubmittedData
         </button>
       )}
 
-      {/* ===== MAIN DASHBOARD ===== */}
+      {/* MAIN DASHBOARD */}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card onClick={() => goToView("TOTAL_CLIENTS")} className="cursor-pointer">
-          <CardHeader><CardTitle>Total Clients</CardTitle></CardHeader>
-          <CardContent className="text-2xl font-bold">{totalClientsCount}</CardContent>
+
+        <Card onClick={() => goToView("TOTAL_CLIENTS")}>
+          <CardHeader>
+            <CardTitle>Total Clients</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">
+            {totalClientsCount}
+          </CardContent>
         </Card>
 
-        <Card onClick={() => goToView("SUBMITTED")} className="cursor-pointer hover:bg-green-50">
-          <CardHeader><CardTitle>Data Submitted Today</CardTitle></CardHeader>
-          <CardContent className="text-2xl font-bold text-green-600">{submittedCount}</CardContent>
+        <Card
+          onClick={() => goToView("SUBMITTED")}
+          className="cursor-pointer hover:bg-green-50"
+        >
+          <CardHeader>
+            <CardTitle>Submitted Today</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold text-green-600">
+            {firebaseToday.length + localToday.length}
+          </CardContent>
         </Card>
 
-        <Card onClick={() => goToView("PENDING_TODAY")} className="cursor-pointer hover:bg-red-50">
-          <CardHeader><CardTitle>Data Pending Today</CardTitle></CardHeader>
-          <CardContent className="text-2xl font-bold text-red-600">{pendingTodayCount}</CardContent>
+        <Card
+          onClick={() => goToView("PENDING_TODAY")}
+          className="cursor-pointer hover:bg-red-50"
+        >
+          <CardHeader>
+            <CardTitle>Pending Today</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold text-red-600">
+            {pendingTodayCount}
+          </CardContent>
         </Card>
+
       </div>
 
-      {/* ===== SUBMITTED DASHBOARD ===== */}
+      {/* SUBMITTED SOURCE */}
+
       {view === "SUBMITTED" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <Card
+            onClick={() => {
+              setSubmissionSource("FIREBASE");
+              goToView("SUBMITTED_SOURCE");
+            }}
+          >
+            <CardHeader>
+              <CardTitle>Online Submitted</CardTitle>
+            </CardHeader>
+            <CardContent>{firebaseToday.length}</CardContent>
+          </Card>
+
+          <Card
+            onClick={() => {
+              setSubmissionSource("LOCAL");
+              goToView("SUBMITTED_SOURCE");
+            }}
+          >
+            <CardHeader>
+              <CardTitle>Local Submitted</CardTitle>
+            </CardHeader>
+            <CardContent>{localToday.length}</CardContent>
+          </Card>
+
+        </div>
+      )}
+
+      {/* SOURCE DASHBOARD */}
+
+      {view === "SUBMITTED_SOURCE" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card onClick={() => goToView("PUSHED")} className="cursor-pointer">
-            <CardHeader><CardTitle>Total Data Pushed</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-green-600">{pushedCount}</CardContent>
+
+          <Card onClick={() => goToView("PUSHED")}>
+            <CardHeader>
+              <CardTitle>Total Data Pushed</CardTitle>
+            </CardHeader>
+            <CardContent>{pushedCount}</CardContent>
           </Card>
 
           <Card
             onClick={() => {
               setSelectedClients(toBePushed);
-             setPushDate(formattedOneDayBefore);
+              setPushDate(selectedDate);
               goToView("TO_BE_PUSHED");
             }}
-            className="cursor-pointer hover:bg-yellow-50"
           >
-            <CardHeader><CardTitle>To Be Pushed</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-yellow-600">{toBePushedCount}</CardContent>
+            <CardHeader>
+              <CardTitle>To Be Pushed</CardTitle>
+            </CardHeader>
+            <CardContent>{toBePushedCount}</CardContent>
           </Card>
 
-          <Card onClick={() => goToView("FAILED")} className="cursor-pointer hover:bg-red-50">
-            <CardHeader><CardTitle>Failed</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-red-600">{failedCount}</CardContent>
+          <Card onClick={() => goToView("FAILED")}>
+            <CardHeader>
+              <CardTitle>Failed</CardTitle>
+            </CardHeader>
+            <CardContent>{failedCount}</CardContent>
           </Card>
+
         </div>
       )}
 
-      {/* ===== LIST VIEWS ===== */}
+      {/* LIST VIEWS */}
+
       {[
         ["TOTAL_CLIENTS", clients],
         ["PENDING_TODAY", pendingToday],
-        ["PUSHED", pushedClients],
-        ["FAILED", failedClients],
+       
+        ["FAILED", failedClients]
       ].map(
         ([v, list]) =>
           view === v && (
@@ -317,9 +440,11 @@ const submittedToday = lastSubmittedData
           )
       )}
 
-      {/* ===== TO BE PUSHED ===== */}
+      {/* TO BE PUSHED */}
+
       {view === "TO_BE_PUSHED" && (
         <div className="space-y-4 border rounded p-4">
+
           <div className="max-h-60 overflow-y-auto border p-2 rounded">
             {toBePushed.map((c, i) => (
               <label key={`${c}-${i}`} className="flex gap-2">
@@ -353,20 +478,63 @@ const submittedToday = lastSubmittedData
           >
             {loading ? "Processing..." : "Push to RCS"}
           </button>
+
         </div>
       )}
+      {view === "PUSHED" && (
+  <div className="border rounded p-4 overflow-x-auto">
+
+    <table className="w-full border text-sm">
+
+      <thead className="bg-gray-100">
+        <tr>
+          <th className="border px-3 py-2 text-left">Client</th>
+          <th className="border px-3 py-2 text-left">Date</th>
+          <th className="border px-3 py-2 text-left">Modules</th>
+          <th className="border px-3 py-2 text-left">Status</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        {pushedData.map((row: any, i: number) => (
+          <tr key={i}>
+
+            <td className="border px-3 py-2">
+              {row.client_name}
+            </td>
+
+            <td className="border px-3 py-2">
+              {row.report_date}
+            </td>
+
+            <td className="border px-3 py-2">
+              {row.modules.join(", ")}
+            </td>
+
+            <td className="border px-3 py-2">
+              {row.status === "SUCCESS" ? (
+                <span className="text-green-600 font-semibold">
+                  SUCCESS
+                </span>
+              ) : (
+                <span className="text-red-600 font-semibold">
+                  FAILED
+                </span>
+              )}
+            </td>
+
+          </tr>
+        ))}
+
+      </tbody>
+
+    </table>
+
+  </div>
+)}
+      
+
     </div>
   );
-}
-
-/* ================= DOWNLOAD ================= */
-
-function downloadJSON(data: any, date: string) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: "application/json",
-  });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `push_result_${date}.json`;
-  a.click();
 }

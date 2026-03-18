@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { pool } from "@/lib/db"
 import https from "https"
+import { logPushStatus } from "@/lib/pushLogger"
 export const runtime = "nodejs"
 
 /* ================= CONFIG ================= */
@@ -10,10 +11,10 @@ const BATCH_SIZE = 10
 const REQUEST_TIMEOUT = 15000
 
 const DEPOSIT_LOAN_URL =
-  "https://dashboard.kooturavu.tn.gov.in/v1/api/uccs/deposit_loan/upsert"
+  "https://dashboard.kooturavu.tn.gov.in/v1/api/scardb/deposit_loan/upsert"
 
 const JEWEL_URL =
-  "https://dashboard.kooturavu.tn.gov.in/v1/api/uccs/jwel/upsert"
+  "https://dashboard.kooturavu.tn.gov.in/v1/api/scardb/jwel/upsert"
 
 /* ================= KEEP ALIVE ================= */
 
@@ -40,32 +41,48 @@ const toDateOnly = (value: string) => {
 
 /* ================= SAFE FETCH ================= */
 
-async function safeFetch(url: string, payload: any) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
+async function safeFetch(url: string, payload: any, retries = 3) {
 
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.RCS_API_KEY!,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-      // @ts-ignore
-      agent: httpsAgent,
-    })
+  for (let attempt = 1; attempt <= retries; attempt++) {
 
-    const text = await res.text()
-    let data
-    try { data = JSON.parse(text) } catch { data = text }
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
 
-    return data
-  } catch (err: any) {
-    return { error: err.message }
-  } finally {
-    clearTimeout(timeout)
+    try {
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.RCS_API_KEY!,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+        // @ts-ignore
+        agent: httpsAgent,
+      })
+
+      const text = await res.text()
+
+      let data
+      try { data = JSON.parse(text) } catch { data = text }
+
+      clearTimeout(timeout)
+
+      return data
+
+    } catch (err: any) {
+
+      clearTimeout(timeout)
+
+      if (attempt === retries) {
+        return { error: err.message }
+      }
+
+      console.log(`Retry ${attempt} failed... retrying`)
+
+      await new Promise(r => setTimeout(r, 2000))
+    }
   }
 }
 
@@ -159,6 +176,14 @@ export async function POST(req: Request) {
               : await safeFetch(DEPOSIT_LOAN_URL, payload)
 
             depositLoanResponses.push(res)
+            await logPushStatus({
+                        source: "Server",
+                        clientName,
+                        fromDate,
+                        module: "DEPOSIT/LOAN/MEMBER",
+                        response: res,
+                        status: DRY_RUN ? "DRY_RUN" : res?.success ? "SUCCESS" : "FAILED",
+                      })
           }))
         }
 
@@ -183,6 +208,14 @@ export async function POST(req: Request) {
               : await safeFetch(JEWEL_URL, payload)
 
             jewelResponses.push(res)
+            await logPushStatus({
+                        source: "Server",
+                        clientName,
+                        fromDate,
+                        module: "JEWEL",
+                        response: res,
+                        status: DRY_RUN ? "DRY_RUN" : res?.success ? "SUCCESS" : "FAILED",
+                      })
           }))
         }
 
@@ -199,7 +232,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      source: "POSTGRES",
+      source: "Server",
       mode: DRY_RUN ? "DRY_RUN" : "LIVE",
       results,
     })

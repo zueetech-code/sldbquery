@@ -24,7 +24,7 @@ export default function ErcsLayout({ children }: { children: React.ReactNode }) 
       {/* Header */}
       <header className="fixed left-0 right-0 top-0 z-30 h-16 border-b border-border bg-background flex items-center justify-between px-6">
         <h1 className="text-xl font-semibold normal text-black-700">
-          SLDB ERCS Dashboard
+           ERCS Dashboard
         </h1>
 
         <div className="flex gap-3">

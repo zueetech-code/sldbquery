@@ -324,7 +324,7 @@ const handleLogout = async () => {
 
           XLSX.writeFile(
             wb,
-            `Report_${sdsCode}_${reportDate}.xlsx`
+            `Report_${sdsCode}_${clientName}_${reportDate}.xlsx`
           )
         }
       //Handle Preview and Download
@@ -641,7 +641,7 @@ const handleLogout = async () => {
          STEP 3: NO REPORTS AT ALL → RUN BRANCH QUERY
       ======================================================= */
 
-      setProgress("No previous report found. Executing Branch query...")
+      setProgress("No previous report found. Fetching Branch Details...")
 
       branchResult = await runQuery("branch")
 
@@ -652,7 +652,7 @@ const handleLogout = async () => {
        STEP 4: ALWAYS RUN DATE-DEPENDENT QUERIES
     ======================================================= */
 
-    setProgress("Executing Deposit/Loan/Member query...")
+    setProgress("Fetching Deposit/Loan/Member Details...")
 
     combined = await runQuery("deposit")
 
@@ -662,7 +662,7 @@ const handleLogout = async () => {
     newData.deposit = allRows.filter((r: { modules: string }) => r.modules === "Deposits")
     newData.loan = allRows.filter((r: { modules: string }) => r.modules === "Loans")
 
-    setProgress("Executing Jewel query...")
+    setProgress("Fetching Jewel Details...")
 
     jewelResult = await runQuery("jewel")
 
@@ -683,7 +683,7 @@ const handleLogout = async () => {
     setFetchedData(newData)
     setColumnOrders(newColumnOrders)
 
-    setProgress("All queries completed successfully")
+    setProgress("Data Fetch completed successfully")
     if (newData.branch && newData.branch.length > 0) {
       const firstRow = newData.branch[0]
 
@@ -701,7 +701,7 @@ const handleLogout = async () => {
   }
    catch (error) {
     console.error(error)
-    setProgress("Error while executing queries")
+    setProgress("Error while Fetching Details")
   }
 
   setLoading(false)
@@ -1114,11 +1114,11 @@ const handleSubmitReport = async () => {
 
     // 🔥 Success Message
     if (saveOptions.online && saveOptions.offline) {
-      alert("Saved to BOTH Online and Local Server successfully!")
+      alert("Saved to Server successfully!")
     } else if (saveOptions.online) {
       alert("Saved to Online successfully!")
     } else {
-      alert("Saved to Local Server successfully!")
+      alert("Saved to Server successfully!")
     }
 
     resetall()
