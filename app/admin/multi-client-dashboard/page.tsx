@@ -642,7 +642,7 @@ return(
 {getEmail(c.id)}
 </td>
 <td className="border p-2">
-  {lastClosingDates[c.name] || "-"}
+  {lastClosingDates[c.id] || "-"}
 </td>
 
 <td className="border p-2">
