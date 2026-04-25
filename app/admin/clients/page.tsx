@@ -1,7 +1,7 @@
 "use client"
 
 import { CreateClientDialog } from "@/components/create-client-dialog"
-import { RCSClientsTable } from "@/components/rcs-client-table"
+import { ClientsTable } from "@/components/clients-table"
 import {
   Card,
   CardContent,
@@ -295,7 +295,7 @@ export default function ClientsPage() {
                     Check Online Clients Status
                   </button>
                 )}
-              <RCSClientsTable clients={tableClients} onUpdate={fetchClients} />
+              <ClientsTable clients={tableClients} onUpdate={fetchClients} />
             </CardContent>
           </Card>
         </>
