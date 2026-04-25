@@ -23,6 +23,7 @@ import {
 import { auth } from "@/lib/firebase-client"
 import { resolveHeartbeatStatus } from "@/lib/heartbeat"
 import { subscribeLastSeen } from "@/lib/agent-heartbeat"
+import { RCSClientsTable } from "@/components/rcs-client-table"
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
@@ -295,7 +296,7 @@ export default function ClientsPage() {
                     Check Online Clients Status
                   </button>
                 )}
-              <ClientsTable clients={tableClients} onUpdate={fetchClients} />
+              <RCSClientsTable clients={tableClients} onUpdate={fetchClients} />
             </CardContent>
           </Card>
         </>
