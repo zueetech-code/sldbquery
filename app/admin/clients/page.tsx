@@ -24,12 +24,13 @@ import { auth } from "@/lib/firebase-client"
 import { resolveHeartbeatStatus } from "@/lib/heartbeat"
 import { subscribeLastSeen } from "@/lib/agent-heartbeat"
 import { RCSClientsTable } from "@/components/rcs-client-table"
+import ErcsLayout from "@/app/admin/ercs/dashboard/layout" // adjust path if needed
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [liveClients, setLiveClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [userRole, setUserRole] = useState<string>("admin")
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | "online" | "offline">("all")
 
   /*** ================= NEW STATES FOR DISTRICT-DRILLDOWN ================= ***/
@@ -54,7 +55,7 @@ export default function ClientsPage() {
 
       const db = getFirestore()
 
-      if (role === "admin") {
+      if (role === "admin" || role === "ercs") {
         const q = query(collection(db, "clients"), orderBy("createdAt", "desc"))
         const snapshot = await getDocs(q)
         const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Client[]
@@ -145,7 +146,7 @@ export default function ClientsPage() {
 
     const stats: Record<string, number> = {}
     relevantClients.forEach((client) => {
-      const district = client.district ?? "Unknown"
+      const district = client.district ?? "SLDB"
       stats[district] = (stats[district] || 0) + 1
     })
 
@@ -175,8 +176,17 @@ export default function ClientsPage() {
   }, [liveClients, selectedCategory, selectedDistrict])
 
   /* ================= UI ================= */
-
+  if (userRole === null) {
   return (
+    <div className="flex items-center justify-center h-screen">
+      Loading...
+    </div>
+  )
+}
+
+
+ const content = (
+     
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
@@ -302,5 +312,11 @@ export default function ClientsPage() {
         </>
       )}
     </div>
+    
   )
+  if (userRole === "ercs") {
+  return <ErcsLayout>{content}</ErcsLayout>
+}
+
+return content
 }
