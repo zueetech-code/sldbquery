@@ -156,7 +156,12 @@ const ercsMenuItems = [
     icon: Users,
     roles: ["ercs"],
   },
- 
+  {
+    title: "Logs",
+    href: "/admin/logs",
+    icon: ScrollText,
+    roles: ["ercs"],
+  },
 ]
 
 
