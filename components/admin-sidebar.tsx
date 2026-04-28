@@ -149,24 +149,14 @@ const agentMenuItems = [
 ]
 
 const ercsMenuItems = [
-  {
-    title: "Dashboard",
-    href: "/admin/ercs/dashboard",
-    icon: LayoutDashboard,
-    roles: ["ercs"],
-  },
+  
    {
-    title: "Fill Data",
-    href: "/admin/fill-data/ercs",
-    icon: FileText,
+    title: "Clients",
+    href: "/admin/clients",
+    icon: Users,
     roles: ["ercs"],
   },
-  {
-    title: "Logs",
-    href: "/admin/logs",
-    icon: ScrollText,
-    roles: ["ercs"],
-  },
+  
 ]
 
 
