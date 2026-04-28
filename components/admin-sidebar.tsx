@@ -180,6 +180,7 @@ export function AdminSidebar() {
         } else if (role === "agent") {
           menu = agentMenuItems
         }else if (role === "ercs") {
+          menu = ercsMenuItems
         }
         setFilteredMenuItems(menu)
       }
