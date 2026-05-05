@@ -304,7 +304,6 @@ checkSubmissionStatus()
 /* ---------------- PROCESS CLIENT ---------------- */
 
 async function processClient(clientId:string){
-  
 
 const client = clients.find(c=>c.id===clientId)
 const clientName = client?.name || clientId
@@ -642,7 +641,7 @@ return(
 {getEmail(c.id)}
 </td>
 <td className="border p-2">
-  {lastClosingDates[c.id] || "-"}
+  {lastClosingDates[c.name] || "-"}
 </td>
 
 <td className="border p-2">
