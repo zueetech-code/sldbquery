@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import * as XLSX from "xlsx"
+import { saveAs } from "file-saver"
 import {
   Select,
   SelectContent,
@@ -255,7 +257,7 @@ export default function ExecuteQueryPage() {
 }
 
 // Format cell value for display
-function formatCellValue(value: any) {
+function formatCellValue(value: any): string {
   // Firestore Timestamp
   if (value && typeof value === "object" && "seconds" in value) {
     const date = new Date(value.seconds * 1000)
@@ -264,10 +266,15 @@ function formatCellValue(value: any) {
     const month = String(date.getMonth() + 1).padStart(2, "0")
     const day = String(date.getDate()).padStart(2, "0")
 
-    return `${year}-${month}-${day}` // yyyy-mm-dd
+    return `${year}-${month}-${day}`
   }
 
-  return String(value ?? "")
+  // Always return string
+  if (value === null || value === undefined) {
+    return ""
+  }
+
+  return String(value)
 }
 
 // Build UPDATE SQL statement
@@ -432,6 +439,100 @@ const isSelectOnlyQuery = (sql: string) => {
 
   return true;
 };
+function downloadExcel() {
+  if (!resultRows.length) {
+    toast({
+      title: "No data",
+      description: "Nothing to export",
+      variant: "destructive",
+    })
+    return
+  }
+
+  try {
+    // Get selected client
+    const selectedClient = clients.find(
+      (c) => c.id === selectedClientId
+    )
+
+    // Safe filename
+    const clientName =
+      selectedClient?.name
+        ?.replace(/[^a-z0-9]/gi, "_")
+        ?.toLowerCase() || "client"
+
+    // Optional timestamp
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+
+    const fileName = `${clientName}_query_results_${timestamp}.xlsx`
+
+    // Prepare export data
+    const exportData = resultRows.map((row, rowIndex) => {
+      const formatted: Record<string, any> = {}
+
+      columnOrder.forEach((col) => {
+        formatted[col] = formatCellValue(
+          editedRows[rowIndex]?.[col] ?? row[col]
+        )
+      })
+
+      return formatted
+    })
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportData)
+
+    // Auto column width
+    const columnWidths = columnOrder.map((col) => ({
+      wch: Math.max(
+        col.length,
+        ...exportData.map((row) =>
+          String(row[col] ?? "").length
+        )
+      ) + 5,
+    }))
+
+    worksheet["!cols"] = columnWidths
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new()
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Query Results"
+    )
+
+    // Generate Excel file
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    })
+
+    // Save file
+    const blob = new Blob([excelBuffer], {
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+    })
+
+    saveAs(blob, fileName)
+
+    toast({
+      title: "Download started",
+      description: fileName,
+    })
+  } catch (err: any) {
+    console.error("Excel export error:", err)
+
+    toast({
+      title: "Export failed",
+      description: err.message || "Could not generate Excel file",
+      variant: "destructive",
+    })
+  }
+}
 
 
 
@@ -607,6 +708,14 @@ const isSelectOnlyQuery = (sql: string) => {
 
 
                     </table>
+                     <Button
+                        type="button"
+                        variant="outline"
+                        onClick={downloadExcel}
+                      >
+                        Download Results
+                      </Button>
+
                      <Button
                       type="button"
                       className="mt-3"
