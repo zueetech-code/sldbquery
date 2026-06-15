@@ -1104,7 +1104,7 @@ const handleSubmitReport = async () => {
     // 🔥 If Online selected → Save to Firebase
     if (saveOptions.online) {
       updatedData = await saveToFirebase()
-      await deleteTempQueryResults()
+      //await deleteTempQueryResults()
     }
 
     // 🔥 If Offline selected → Save to API
